@@ -69,12 +69,13 @@ Bees fly in from the right at a random height. They move left at varying speeds.
 
 ### Ant
 
-Ants walk along the floor from the right. They are indestructible under normal conditions — the only safe option is to jump over them.
+Ants walk along the floor from the right. Under normal conditions the only safe option is to jump over them. When the **Big Player** Surprise Box effect is active, ants can also be stomped from above.
 
 | Interaction | Result |
 |---|---|
-| Touch from any angle | Lose 1 life |
+| Touch from any angle (normal) | Lose 1 life |
 | Torch power-up active | Ant dies on contact (+50 score) |
+| Big Player active + land on top (falling from above) | Stomp: +50 score, particle burst, small upward bounce |
 
 ### Spider
 
@@ -116,18 +117,18 @@ An amber lab crate with a purple glow and a `?` symbol. **One appears per level*
 
 | Effect | What happens |
 |---|---|
-| **Mirror Controls** | Left and Right inputs are permanently swapped for the rest of the game |
+| **Mirror Controls** | Left and Right inputs are swapped for this level only |
 | **Upside Down** | The entire game canvas is flipped upside down for this level |
-| **Extra Heart** | Gain +1 life immediately; the bonus heart carries into future levels (max +3 bonus hearts, 6 total lives) |
+| **Extra Heart** | Gain +1 life immediately; the bonus heart carries into future levels (max +3 bonus hearts, 6 total lives); resets on full game restart |
 | **2× Score** | All score gains are doubled for this level |
-| **Big Player** | Player dimensions double (100 × 80 px) for this level |
+| **Big Player** | Player dimensions double (100 × 80 px) for this level; landing on ants from above now stomps them (+50 score) |
 | **Super Jump** | Jump strength increases by ×1.7 for this level |
-| **Darkness** | A 10-second radial spotlight effect — only a small area around the player is visible |
-| **Bee Swarm** | Six bees spawn immediately at the right edge of the screen |
+| **Darkness** | A 10-second spotlight effect — only a ~210 px radius around the player is visible |
+| **Bee Swarm** | Six bees spawn immediately; a second wave of six arrives 4 seconds later. A SWARM countdown bar appears in the HUD |
 | **Teleport** | The player is warped 1 500–3 000 px forward; the key is auto-collected if not already held |
-| **Baby Mole Rat** | A baby companion follows the player and absorbs the next hit (no life lost) |
+| **Baby Mole Rat** | A baby companion follows the player (with a visible gap behind) and absorbs the next hit (no life lost); persists until the hit is taken |
 
-Effects that are limited to one level (Upside Down, 2× Score, Big Player, Super Jump, Darkness) reset when the level ends. Persistent effects (Mirror Controls, Extra Heart, Baby Mole Rat) carry forward until a full game restart.
+Effects that are limited to one level (Mirror Controls, Upside Down, 2× Score, Big Player, Super Jump, Darkness) reset when the level ends. Persistent effects (Extra Heart, Baby Mole Rat) carry forward until a full game restart.
 
 Active effects are shown as badges in the top-right corner of the HUD.
 
@@ -139,6 +140,7 @@ Active effects are shown as badges in the top-right corner of the HUD.
 |---|---|
 | Stomp or torch-kill a bee | +100 (×2 with Score Multiplier) |
 | Torch-kill an ant | +50 (×2 with Score Multiplier) |
+| Big Player stomp an ant | +50 (×2 with Score Multiplier) |
 | Torch-kill a spider | +200 (×2 with Score Multiplier) |
 | Complete a level | `max(0, timeLeft × 10)` time bonus |
 

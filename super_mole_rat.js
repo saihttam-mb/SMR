@@ -57,9 +57,10 @@ let useBestLevels = false;
 let surpriseBox         = null;   // SurpriseBox entity (null once collected)
 let activeEffect        = '';     // currently active effect key (for HUD / announce)
 let effectAnnounceTimer = 0;      // frames remaining for big announcement banner
+let lastSurpriseEffect  = '';     // prevents same effect two levels in a row
 
 // Persistent effects — survive level-advance (keepLevel=true); reset on full restart
-let mirrorControls    = false;    // effect 1: LEFT ↔ RIGHT swapped, rest of game
+let mirrorControls    = false;    // effect 1: LEFT ↔ RIGHT swapped, this level only
 let bonusHeartsEarned = 0;        // effect 3: permanent extra hearts counter
 let babyMoleRat       = false;    // effect 17: companion; absorbs next hit
 
@@ -70,6 +71,7 @@ let bigPlayerActive = false;      // effect 8b: double size this level
 let superJumpActive = false;      // effect 9: higher jumps this level
 let darknessActive  = false;      // effect 10: darkness overlay active
 let darknessTimer   = 0;          // effect 10: frames remaining (600 = 10 s)
+let beeSwarmWaveTimer = 0;        // effect 8 (beeswarm): frames until second wave of 6 bees
 
 // ── Test mode globals ─────────────────────────────────────────────────────
 let testMode     = false;  // true while a test session is active
@@ -127,13 +129,15 @@ function resetGame(keepLevel, levelDef) {
   superJumpActive   = false;
   darknessActive    = false;
   darknessTimer     = 0;
+  beeSwarmWaveTimer = 0;
+  mirrorControls    = false;
   effectAnnounceTimer = 0;
   activeEffect      = '';
   // ── Persistent effect resets (full restart only) ───────────────────────
   if (!keepLevel) {
-    mirrorControls    = false;
-    bonusHeartsEarned = 0;
-    babyMoleRat       = false;
+    bonusHeartsEarned  = 0;
+    babyMoleRat        = false;
+    lastSurpriseEffect = '';
   }
   if (!keepLevel) score = 0;
   if (!keepLevel) newHighScoreSet = false;
@@ -693,7 +697,17 @@ function updateGame() {
       continue;
     }
 
-    if (player.checkAntCollision(ants[i])) {
+    let antHit = player.checkAntCollision(ants[i]);
+    if (antHit === 'stomp') {
+      // Big player stomps ant from above
+      spawnParticles(ants[i].x, ants[i].y, 'bee', 8);
+      ants.splice(i, 1);
+      score += 50 * scoreMultiplier;
+      player.bounce();
+      continue;
+    }
+
+    if (antHit === 'damage') {
       player.takeDamage();
       ants.splice(i, 1);
       continue;
@@ -786,6 +800,15 @@ function updateGame() {
     darknessTimer--;
     if (darknessTimer <= 0) {
       darknessActive = false;
+    }
+  }
+
+  // ── Bee swarm wave 2 countdown ────────────────────────────────────────────
+  if (beeSwarmWaveTimer > 0) {
+    beeSwarmWaveTimer--;
+    if (beeSwarmWaveTimer <= 0) {
+      let speedMul = 1 + (level - 1) * 0.2;
+      for (let i = 0; i < 6; i++) bees.push(new Bee(speedMul));
     }
   }
 
@@ -902,7 +925,7 @@ function renderGame() {
   // Baby mole rat companion (drawn just behind the player)
   if (babyMoleRat) {
     push();
-    let babyOffX = player.facingRight ? -28 : 28;
+    let babyOffX = player.facingRight ? -50 : 50;
     let babyAnim = sin(frameCount * 0.28) * 0.6;
     translate(player.x + babyOffX, player.y + 6);
     if (!player.facingRight) scale(-1, 1);
@@ -1219,14 +1242,17 @@ function Player() {
     return 'damage';
   };
 
-  // Ants always damage – no stomp mechanic
+  // Ants always damage; when Big Player is active, landing on top counts as a stomp
   this.checkAntCollision = function (ant) {
-    if (this.invincibleTimer > 0) return false;
+    if (this.invincibleTimer > 0) return null;
     let inX = this.x + this.w / 2 > ant.x - ant.w / 2 &&
               this.x - this.w / 2 < ant.x + ant.w / 2;
     let inY = this.y + this.h / 2 > ant.y - ant.h / 2 &&
               this.y - this.h / 2 < ant.y + ant.h / 2;
-    return inX && inY;
+    if (!inX || !inY) return null;
+    // Big Player only: falling onto the ant from above counts as a stomp kill
+    if (bigPlayerActive && this.velY > 0 && this.y < ant.y) return 'stomp';
+    return 'damage';
   };
 
   // Spiders always damage – circle-distance check against their hanging body
@@ -1490,6 +1516,9 @@ function triggerSurpriseEffect() {
     'teleport', 'babymolerat'
   ];
   let chosen  = effects[floor(random(effects.length))];
+  // Prevent the same effect appearing two levels in a row
+  if (chosen === lastSurpriseEffect) chosen = effects[floor(random(effects.length))];
+  lastSurpriseEffect  = chosen;
   activeEffect        = chosen;
   effectAnnounceTimer = 240; // 4 s at 60 fps
 
@@ -1523,6 +1552,7 @@ function triggerSurpriseEffect() {
   } else if (chosen === 'beeswarm') {
     let speedMul = 1 + (level - 1) * 0.2;
     for (let i = 0; i < 6; i++) bees.push(new Bee(speedMul));
+    beeSwarmWaveTimer = 240; // second wave of 6 bees in 4 seconds
 
   } else if (chosen === 'teleport') {
     // Auto-collect key so player is never stranded past it
@@ -2245,6 +2275,23 @@ function drawUI() {
     text('DARK', dbx + barW + 5, barY - 1);
   }
 
+  // ── Bee swarm wave 2 countdown bar ───────────────────────────────────────
+  if (beeSwarmWaveTimer > 0) {
+    let sFrac    = beeSwarmWaveTimer / 240;
+    let torchOff = player.torchTimer > 0 ? barW + 46 : 0;
+    let flashOff = player.flashTimer > 0 ? barW + 46 : 0;
+    let darkOff  = (darknessActive && darknessTimer > 0) ? barW + 46 : 0;
+    let sbx = barX + torchOff + flashOff + darkOff;
+    fill(40, 30, 0, 180);
+    rect(sbx, barY, barW, barH, 3);
+    fill(255, int(150 + sFrac * 50), 0, 220);
+    rect(sbx, barY, barW * sFrac, barH, 3);
+    fill(255, 200, 40);
+    textSize(11);
+    textAlign(LEFT, TOP);
+    text('SWARM', sbx + barW + 5, barY - 1);
+  }
+
   // ── Active-effect badges (bottom-right corner of HUD bar) ─────────────────
   let badgeX = width - 14;
   let badgeY = 55;
@@ -2293,7 +2340,7 @@ function drawDarknessOverlay() {
   let px   = player.x;
   let py   = player.y;
   // Radius pulses slightly for a flickering-torch feel
-  let rad  = 130 + sin(frameCount * 0.15) * 12;
+  let rad  = 210 + sin(frameCount * 0.15) * 15;
   let grad = ctx.createRadialGradient(px, py, 0, px, py, rad);
   grad.addColorStop(0,    'rgba(0,0,0,0)');
   grad.addColorStop(0.55, 'rgba(0,0,0,0.7)');
@@ -2310,14 +2357,14 @@ function drawDarknessOverlay() {
 function drawEffectAnnouncement() {
   // Map effect key → display text and colour
   const cfg = {
-    mirror:      { title: 'CONTROLS REVERSED!',   sub: 'Left \u21D4 Right for the rest of the game', col: [255, 80,  80]  },
+    mirror:      { title: 'CONTROLS REVERSED!',   sub: 'Left \u21D4 Right for this level only',             col: [255, 80,  80]  },
     upsidedown:  { title: 'WORLD FLIPPED!',        sub: 'Everything is upside down this level',       col: [255, 140, 40]  },
     extraheart:  { title: '+1 HEART FOREVER!',     sub: 'Bonus heart added \u2014 and it carries on!', col: [255, 80, 120]  },
     score2x:     { title: '2\u00D7 SCORE!',        sub: 'All points doubled for this level',          col: [255, 230, 60]  },
     bigplayer:   { title: 'YOU GREW!',             sub: 'Double size for the rest of this level',     col: [120, 255, 140] },
     superjump:   { title: 'SUPER JUMP!',           sub: 'Huge jump height for the rest of this level',col: [100, 220, 255] },
     darkness:    { title: 'LIGHTS OUT! (10s)',     sub: 'You can barely see \u2014 stay calm',        col: [160, 100, 255] },
-    beeswarm:    { title: 'BEE SWARM!',            sub: '6 bees incoming \u2014 good luck',           col: [255, 200, 40]  },
+    beeswarm:    { title: 'BEE SWARM!',            sub: '6 bees now, 6 more in 4 seconds \u2014 good luck', col: [255, 200, 40]  },
     teleport:    { title: 'TELEPORTED!',           sub: 'Key collected \u2014 you jumped forward',    col: [60,  200, 255] },
     babymolerat: { title: 'BABY COMPANION!',       sub: 'Little buddy will absorb your next hit',     col: [255, 180, 210] },
   };
